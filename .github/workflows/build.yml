@@ -42,12 +42,17 @@ jobs:
 
       - name: Download PaddleOCR Persian model (offline engine)
         run: |
-          mkdir -p app/src/main/assets/paddle
-          B=https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/arabic
+          D=app/src/main/assets/paddle
+          H=https://huggingface.co/monkt/paddleocr-onnx
+          B=$H/resolve/main/languages/arabic
+          mkdir -p $D
           for f in rec.onnx dict.txt; do
-            if [ -s app/src/main/assets/paddle/$f ]; then echo "$f already in project"; else curl -L -f -o app/src/main/assets/paddle/$f $B/$f || rm -f app/src/main/assets/paddle/$f; fi
+            if [ ! -s $D/$f ]; then
+              curl -L -f -o $D/$f $B/$f || true
+            fi
           done
-          ls -la app/src/main/assets/paddle
+          find $D -type f -size 0 -delete
+          ls -la $D
 
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
