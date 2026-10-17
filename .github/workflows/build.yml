@@ -43,14 +43,9 @@ jobs:
       - name: Download PaddleOCR Persian model (offline engine)
         run: |
           mkdir -p app/src/main/assets/paddle
+          B=https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/arabic
           for f in rec.onnx dict.txt; do
-            if [ -s app/src/main/assets/paddle/$f ]; then
-              echo "$f is already in the project, not downloading it"
-            else
-              curl -L -f -o app/src/main/assets/paddle/$f \
-                https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/arabic/$f \
-                || rm -f app/src/main/assets/paddle/$f
-            fi
+            if [ -s app/src/main/assets/paddle/$f ]; then echo "$f already in project"; else curl -L -f -o app/src/main/assets/paddle/$f $B/$f || rm -f app/src/main/assets/paddle/$f; fi
           done
           ls -la app/src/main/assets/paddle
 
