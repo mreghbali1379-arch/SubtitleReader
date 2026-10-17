@@ -14,6 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Find the project folder
+        run: |
+          F=$(find . -name settings.gradle.kts | head -n 1)
+          if [ -z "$F" ]; then
+            echo "settings.gradle.kts not found. Files in the repo:"
+            find . -maxdepth 3 -not -path "./.git/*" | head -n 60
+            exit 1
+          fi
+          P=$(dirname "$F")
+          echo "PROJ=$P" >> $GITHUB_ENV
+          echo "Project folder: $P"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,15 +37,16 @@ jobs:
 
       - name: Download OCR language data (Persian and English)
         run: |
+          cd $PROJ
           mkdir -p app/src/main/assets/tessdata
           for l in fas eng; do
             curl -L -f -o app/src/main/assets/tessdata/$l.traineddata \
               https://github.com/tesseract-ocr/tessdata_fast/raw/main/$l.traineddata
           done
 
-
       - name: Download more accurate OCR language data (best)
         run: |
+          cd $PROJ
           mkdir -p app/src/main/assets/tessdata_best
           for l in fas eng; do
             curl -L -f -o app/src/main/assets/tessdata_best/$l.traineddata \
@@ -42,6 +55,7 @@ jobs:
 
       - name: Download PaddleOCR Persian model (offline engine)
         run: |
+          cd $PROJ
           D=app/src/main/assets/paddle
           H=https://huggingface.co/monkt/paddleocr-onnx
           B=$H/resolve/main/languages/arabic
@@ -56,6 +70,7 @@ jobs:
 
       - name: Build debug APK
         run: |
+          cd $PROJ
           set +e
           gradle :app:assembleDebug --stacktrace > build.log 2>&1
           code=$?
@@ -67,11 +82,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SubtitleReader-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJ }}/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish the APK on the Releases page
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: SubtitleReader (latest build)
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: ${{ env.PROJ }}/app/build/outputs/apk/debug/app-debug.apk
