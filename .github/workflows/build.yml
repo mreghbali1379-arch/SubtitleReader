@@ -1,4 +1,4 @@
-name: Build APK from zip
+name: Build APK
 
 on:
   push:
@@ -10,45 +10,20 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Locate the project
-        run: |
-          if ls ./*.zip >/dev/null 2>&1; then
-            # pick the zip that was committed most recently, whatever its name
-            Z=""; T=0
-            for f in ./*.zip; do
-              t=$(git log -1 --format=%ct -- "$f")
-              if [ "${t:-0}" -ge "$T" ]; then T="${t:-0}"; Z="$f"; fi
-            done
-            echo "Using $Z"
-            unzip -q "$Z" -d project
-            S=$(find project -name settings.gradle.kts | head -1)
-          else
-            echo "No zip in repo root; using project files directly"
-            S=$(find . -name settings.gradle.kts | head -1)
-          fi
-          if [ -z "$S" ]; then
-            echo "::error::settings.gradle.kts not found"
-            exit 1
-          fi
-          echo "P=$(dirname "$S")" >> "$GITHUB_ENV"
-
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Download OCR language data
-        working-directory: ${{ env.P }}
+      - name: Download OCR language data (Persian and English)
         run: |
           mkdir -p app/src/main/assets/tessdata
           for l in fas eng; do
@@ -58,7 +33,6 @@ jobs:
 
 
       - name: Download more accurate OCR language data (best)
-        working-directory: ${{ env.P }}
         run: |
           mkdir -p app/src/main/assets/tessdata_best
           for l in fas eng; do
@@ -66,17 +40,32 @@ jobs:
               https://github.com/tesseract-ocr/tessdata_best/raw/main/$l.traineddata
           done
 
+      - name: Download PaddleOCR Persian model (offline engine)
+        run: |
+          mkdir -p app/src/main/assets/paddle
+          for f in rec.onnx dict.txt; do
+            if [ -s app/src/main/assets/paddle/$f ]; then
+              echo "$f is already in the project, not downloading it"
+            else
+              curl -L -f -o app/src/main/assets/paddle/$f \
+                https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/arabic/$f \
+                || rm -f app/src/main/assets/paddle/$f
+            fi
+          done
+          ls -la app/src/main/assets/paddle
+
       - name: Build debug APK
-        working-directory: ${{ env.P }}
         run: gradle :app:assembleDebug --stacktrace
 
-      - uses: actions/upload-artifact@v5
+      - name: Keep the APK as a build artifact
+        uses: actions/upload-artifact@v4
         with:
           name: SubtitleReader-debug-apk
-          path: ${{ env.P }}/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
 
-      - uses: softprops/action-gh-release@v2
+      - name: Publish the APK on the Releases page
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: SubtitleReader (latest build)
-          files: ${{ env.P }}/app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/debug/app-debug.apk
